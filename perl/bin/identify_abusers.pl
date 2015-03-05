@@ -82,6 +82,7 @@ eval {
 
     foreach my $partition_id (@partitions) {
         Log->info("analyzing partition ID $partition_id");
+
         my $sqldb = bepress::LogRequest::RequestPartition->get_sqldb_for_partition_id(partition_id);
         my @bind_vars;
         if (!scalar(@ips)) {
@@ -107,6 +108,7 @@ eval {
 
             my $sth = $sqldb->sql_execute($sql);
             Log->info("found ".$sth->rows()." distinct IP addresses with counted hits");
+
             @ips = @{$sth->fetchall_arrayref()};
         }
 
@@ -166,7 +168,7 @@ eval {
                 $hits_by_ip->{$ip_address}->{$article_id} = {};
 
                 if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
-                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted} = [$request_timestamp];
+                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted} = [$unique_id];
                     $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}  = [];
                 } else {
                     if (defined($interval_mins)) {
@@ -179,14 +181,14 @@ eval {
 
                         if ($curr_dt->subtract_datetime($prev_dt)->in_units('minutes') < $interval_mins) {
                             Log->debug("failed");
-                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, $request_timestamp);
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, $unique_id);
                         } else {
                             Log->debug("counted");
-                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $request_timestamp);
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
                         }
                     } else {
                         Log->debug("counted");
-                        push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $request_timestamp);
+                        push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
                     }
                 }
             } # end while
@@ -194,6 +196,7 @@ eval {
         } # end foreach $ip_address
 
         Log->info("updating database records");
+
         foreach my $ip_address (keys %$hits_by_ip) {
             Log->trace("updating IP address: $ip_address");
 
@@ -203,24 +206,26 @@ eval {
                 foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
                     Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
 
-                    my $sql = SQLDb::fold("
-                        UPDATE
-                            logged_request
-                        SET
-                            counted_as_hit = false,
-                            failure_reason = 'failed ".$interval_mins." minute interval'
-                        WHERE
-                            unique_id = ?
-                    ");
-                    my @bind_vars = ($unique_id);
-                    Log->trace($sql);
-                    my $rows_updated = $sqldb->sql_do($sql, {}, @bind_vars);
-                    if (!$rows_updated) {
-                        Log->error("failed to update record ID $unique_id! dying");
-                        exit(1);
-                    }
-                    Log->trace("$rows_updated row updated");
-                    Log->trace("finished udpating client ID: $client_id");
+                    foreach my $unique_id (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}}) {
+                        my $sql = SQLDb::fold("
+                            UPDATE
+                                logged_request
+                            SET
+                                counted_as_hit = false,
+                                failure_reason = 'failed ".$interval_mins." minute interval'
+                            WHERE
+                                unique_id = ?
+                        ");
+                        my @bind_vars = ($unique_id);
+                        Log->trace($sql);
+                        my $rows_updated = $sqldb->sql_do($sql, {}, @bind_vars);
+                        if (!$rows_updated) {
+                            Log->error("failed to update record ID $unique_id! dying");
+                            exit(1);
+                        }
+                        Log->trace("$rows_updated row updated");
+                    } # end foreach $unique_id
+                    Log->trace("finished updating client ID: $client_id");
 
                 } # end foreach $client_id
                 Log->trace("finished updating article ID $article_id");
