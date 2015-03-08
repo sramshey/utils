@@ -170,26 +170,30 @@ eval {
                 }
 
                 if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
-                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id} = { counted => [$unique_id], failed => [] };
+                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id} = { counted => ["$unique_id:$request_timestamp"], failed => [] };
                 } else {
                     if (defined($interval_mins)) {
-                        my $prev_timestamp = $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}->[-1];
-                        my $prev_dt = bepress::DateTime->from_sql($prev_timestamp);
-                        my $curr_dt = bepress::DateTime->from_sql($request_timestamp);
-                        
+                        my $prev_hit = $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}->[-1];
+                        my ($prev_hit_id, $prev_hit_epoch) = split(':', $prev_hit);
+                        my $prev_dt = bepress::DateTime->from_epoch(epoch => $prev_hit_epoch);
+                        my $curr_dt = bepress::DateTime->from_epoch(epoch => $request_timestamp);
+
                         Log->debug("previous dt: $prev_dt");
                         Log->debug("current dt: $curr_dt");
 
-                        if ($curr_dt->subtract_datetime($prev_dt)->in_units('minutes') < $interval_mins) {
-                            Log->debug("failed");
-                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, $unique_id);
+                        my $diff_minutes = abs($curr_dt->epoch() - $prev_dt->epoch()) / 60;
+                        Log->debug("time diff (mins): $diff_minutes");
+
+                        if ($diff_minutes < $interval_mins) {
+                            Log->debug("failed $interval_mins minute interval");
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, "$unique_id:$request_timestamp");
                         } else {
-                            Log->debug("counted");
-                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
+                            Log->debug("counted ok");
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, "$unique_id:$request_timestamp");
                         }
                     } else {
-                        Log->debug("counted");
-                        push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
+                        Log->debug("counted ok");
+                        push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, "$unique_id:$request_timestamp");
                     }
                 }
             } # end while
@@ -207,7 +211,8 @@ eval {
                 foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
                     Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
 
-                    foreach my $unique_id (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
+                    foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
+                        my ($unique_id, $request_timestamp) = split(':', $key);
                         my $sql = SQLDb::fold("
                             UPDATE
                                 logged_request
