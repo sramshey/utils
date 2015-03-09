@@ -220,6 +220,7 @@ eval {
                             }
                         }
                     }
+                }
                 if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
                     $hits_by_ip->{$ip_address}->{$article_id}->{$client_id} = { counted => ["$unique_id:$request_timestamp"], failed => [] };
                 } else {
