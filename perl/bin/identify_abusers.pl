@@ -257,20 +257,16 @@ eval {
                 Log->trace("updating article ID $article_id");
 
                 if ($exclude_all_clients) {
-                    #code
-                } else {}
+                     Log->debug("ip address: $ip_address\tarticle ID: $article_id");
 
-                foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
-                    Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
-
-                    foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
+                    foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{failed}}) {
                         my ($unique_id, $request_timestamp) = split(':', $key);
                         my $sql = SQLDb::fold("
                             UPDATE
                                 logged_request
                             SET
                                 counted_as_hit = false,
-                                failure_reason = 'failed ".$interval_mins." minute interval'
+                                failure_reason = 'failed ".$interval_mins." minute interval all clients blocked'
                             WHERE
                                 unique_id = ?
                         ");
@@ -283,10 +279,35 @@ eval {
                         }
                         Log->trace("$rows_updated row updated");
                     } # end foreach $unique_id
-                    Log->trace("finished updating client ID: $client_id");
-
-                } # end foreach $client_id
-                Log->trace("finished updating article ID $article_id");
+                } else {
+                    foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
+                        Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
+    
+                        foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
+                            my ($unique_id, $request_timestamp) = split(':', $key);
+                            my $sql = SQLDb::fold("
+                                UPDATE
+                                    logged_request
+                                SET
+                                    counted_as_hit = false,
+                                    failure_reason = 'failed ".$interval_mins." minute interval'
+                                WHERE
+                                    unique_id = ?
+                            ");
+                            my @bind_vars = ($unique_id);
+                            Log->trace($sql);
+                            my $rows_updated = $sqldb->sql_do($sql, {}, @bind_vars);
+                            if (!$rows_updated) {
+                                Log->error("failed to update record ID $unique_id! dying");
+                                exit(1);
+                            }
+                            Log->trace("$rows_updated row updated");
+                        } # end foreach $unique_id
+                        Log->trace("finished updating client ID: $client_id");
+    
+                    } # end foreach $client_id
+                    Log->trace("finished updating article ID $article_id");
+                }
 
             } # end foreach $article_id
             Log->trace("finished updating IP address $ip_address");
