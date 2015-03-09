@@ -183,8 +183,11 @@ eval {
                     } else {
                         if (defined($interval_mins)) {
                             my $prev_hit = $hits_by_ip->{$ip_address}->{$article_id}->{counted}->[-1];
+                            Log->debug("prev hit row key: $prev_hit");
                             my ($prev_hit_id, $prev_hit_epoch) = split(':', $prev_hit);
+                            Log->debug("prev hit epoch: $prev_hit_epoch");
                             my $prev_dt = bepress::DateTime->from_epoch(epoch => $prev_hit_epoch);
+                            Log->debug("current hit epoch: $prev_hit_epoch");
                             my $curr_dt = bepress::DateTime->from_epoch(epoch => $request_timestamp);
     
                             Log->debug("previous dt: $prev_dt");
@@ -213,8 +216,11 @@ eval {
                     } else {
                         if (defined($interval_mins)) {
                             my $prev_hit = $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}->[-1];
+                            Log->debug("prev hit row key: $prev_hit");
                             my ($prev_hit_id, $prev_hit_epoch) = split(':', $prev_hit);
+                            Log->debug("prev hit epoch: $prev_hit_epoch");
                             my $prev_dt = bepress::DateTime->from_epoch(epoch => $prev_hit_epoch);
+                            Log->debug("current hit epoch: $request_timestamp");
                             my $curr_dt = bepress::DateTime->from_epoch(epoch => $request_timestamp);
     
                             Log->debug("previous dt: $prev_dt");
