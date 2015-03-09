@@ -279,8 +279,8 @@ eval {
                 if ($exclude_all_clients) {
                      Log->debug("ip address: $ip_address\tarticle ID: $article_id");
 
-                    foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{failed}}) {
-                        my ($unique_id, $request_timestamp) = split(':', $key);
+                    foreach my $row_key (@{$hits_by_ip->{$ip_address}->{$article_id}->{failed}}) {
+                        my ($unique_id, $request_timestamp) = split(':', $row_key);
                         my $sql = SQLDb::fold("
                             UPDATE
                                 logged_request
@@ -303,8 +303,8 @@ eval {
                     foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
                         Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
     
-                        foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
-                            my ($unique_id, $request_timestamp) = split(':', $key);
+                        foreach my $row_key (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
+                            my ($unique_id, $request_timestamp) = split(':', $row_key);
                             my $sql = SQLDb::fold("
                                 UPDATE
                                     logged_request
