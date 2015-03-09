@@ -38,11 +38,12 @@ use bepress::LogRequest::IPActivity qw(
 );
 
 my ($help);
-my ($dt_start_str, $dt_end_str, $interval_mins, @partitions, @ips);
+my ($dt_start_str, $dt_end_str, $exclude_all_clients, $interval_mins, @partitions, @ips);
 
 GetOptions(
     'dt-start=s'  => \$dt_start,
     'dt=end=s'    => \$dt_end,
+    'exclude-all-clients' => \$exclude_all_clients,
     'interval=i'  => \$interval_mins,
     'ip=s'        => \@ips,
     'partition=i' => \@partitions,
@@ -167,28 +168,56 @@ eval {
 
                 $hits_by_ip->{$ip_address}->{$article_id} = {};
 
-                if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
-                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted} = [$unique_id];
-                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}  = [];
+                if ($exclude_all_clients) {
+                    if (! defined($hits_by_ip->{$ip_address}->{$article_id})) {
+                        $hits_by_ip->{$ip_address}->{$article_id}->{counted} = [$unique_id];
+                        $hits_by_ip->{$ip_address}->{$article_id}->{failed}  = [];
+                    } else {
+                        if (defined($interval_mins)) {
+                            my $prev_timestamp = $hits_by_ip->{$ip_address}->{$article_id}->{counted}->[-1];
+                            my $prev_dt = bepress::DateTime->from_sql($prev_timestamp);
+                            my $curr_dt = bepress::DateTime->from_sql($request_timestamp);
+                            
+                            Log->debug("previous dt: $prev_dt");
+                            Log->debug("current dt: $curr_dt");
+    
+                            if ($curr_dt->subtract_datetime($prev_dt)->in_units('minutes') < $interval_mins) {
+                                Log->debug("failed");
+                                push(@{$hits_by_ip->{$ip_address}->{$article_id}->{failed}}, $unique_id);
+                            } else {
+                                Log->debug("counted");
+                                push(@{$hits_by_ip->{$ip_address}->{$article_id}->{counted}}, $unique_id);
+                            }
+                        } else {
+                            Log->debug("counted");
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{counted}}, $unique_id);
+                        }
+                    }
                 } else {
-                    if (defined($interval_mins)) {
-                        my $prev_timestamp = $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}->[-1];
-                        my $prev_dt = bepress::DateTime->from_sql($prev_timestamp);
-                        my $curr_dt = bepress::DateTime->from_sql($request_timestamp);
-                        
-                        Log->debug("previous dt: $prev_dt");
-                        Log->debug("current dt: $curr_dt");
-
-                        if ($curr_dt->subtract_datetime($prev_dt)->in_units('minutes') < $interval_mins) {
-                            Log->debug("failed");
-                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, $unique_id);
+                    if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
+                        # this is the first counted hit from this IP/article ID/client ID combo
+                        $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted} = [$unique_id];
+                        $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}  = [];
+                    } else {
+                        if (defined($interval_mins)) {
+                            my $prev_timestamp = $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}->[-1];
+                            my $prev_dt = bepress::DateTime->from_sql($prev_timestamp);
+                            my $curr_dt = bepress::DateTime->from_sql($request_timestamp);
+                            
+                            Log->debug("previous dt: $prev_dt");
+                            Log->debug("current dt: $curr_dt");
+    
+                            if ($curr_dt->subtract_datetime($prev_dt)->in_units('minutes') < $interval_mins) {
+                                Log->debug("failed");
+                                push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, $unique_id);
+                            } else {
+                                Log->debug("counted");
+                                push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
+                            }
                         } else {
                             Log->debug("counted");
                             push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
                         }
-                    } else {
-                        Log->debug("counted");
-                        push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
                     }
                 }
             } # end while
@@ -202,6 +231,10 @@ eval {
 
             foreach my $article_id (keys %{$hits_by_ip->{$ip_address}}) {
                 Log->trace("updating article ID $article_id");
+
+                if ($exclude_all_clients) {
+                    #code
+                } else {}
 
                 foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
                     Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
