@@ -41,8 +41,8 @@ my ($help);
 my ($dt_start_str, $dt_end_str, $exclude_all_clients, $interval_mins, @partitions, @ips);
 
 GetOptions(
-    'dt-start=s'  => \$dt_start,
-    'dt=end=s'    => \$dt_end,
+    'dt-start=s'  => \$dt_start_str,
+    'dt=end=s'    => \$dt_end_str,
     'exclude-all-clients' => \$exclude_all_clients,
     'interval=i'  => \$interval_mins,
     'ip=s'        => \@ips,
@@ -170,7 +170,6 @@ eval {
                     $hits_by_ip->{$ip_address}->{$article_id} = {};
                 }
 
-<<<<<<< HEAD
                 $hits_by_ip->{$ip_address}->{$article_id} = {};
 
                 if ($exclude_all_clients) {
@@ -219,7 +218,8 @@ eval {
                                 Log->debug("counted");
                                 push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
                             }
-=======
+                        }
+                    }
                 if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
                     $hits_by_ip->{$ip_address}->{$article_id}->{$client_id} = { counted => ["$unique_id:$request_timestamp"], failed => [] };
                 } else {
