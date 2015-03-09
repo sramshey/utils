@@ -84,7 +84,7 @@ eval {
     foreach my $partition_id (@partitions) {
         Log->info("analyzing partition ID $partition_id");
 
-        my $sqldb = bepress::LogRequest::RequestPartition->get_sqldb_for_partition_id(partition_id);
+        my $sqldb = bepress::LogRequest::RequestPartition->get_sqldb_for_partition_id($partition_id);
         my @bind_vars;
         if (!scalar(@ips)) {
             my $sql = SQLDb::fold("
@@ -107,10 +107,12 @@ eval {
             }
             Log->debug($sql);
 
-            my $sth = $sqldb->sql_execute($sql);
+            my $sth = $sqldb->sql_execute($sql, @bind_vars);
             Log->info("found ".$sth->rows()." distinct IP addresses with counted hits");
 
-            @ips = @{$sth->fetchall_arrayref()};
+            while (my ($ip_address) = $sth->fetchrow_array()) {
+                push(@ips, $ip_address);
+            }
         }
 
         foreach my $ip_address (@ips) {
@@ -128,7 +130,7 @@ eval {
                 FROM
                     logged_request
                 WHERE
-                        src_ip = ?
+                        src_ip=?
                     AND
                         counted_as_hit is true
             ");
@@ -143,11 +145,13 @@ eval {
                 push(@bind_vars, $dt_end);
             }
 
-            if (scalar(@ips)) {
-                # this might not work....
-                $sql .= " AND src_ip IN (".join(',', @{'?'{(scalar(@ips))}).")";
-                push(@bind_vars, @ips);
-            }
+#            if (scalar(@ips)) {
+#                Log->error("specifying IDs not yet supported");
+#                die;
+#                # this might not work....
+#                $sql .= " AND src_ip IN (".join(',', @{'?'{(scalar(@ips))}}).")";
+#                push(@bind_vars, @ips);
+#            }
 
             $sql .= " order by request_timestamp ASC";
             Log->debug($sql);
@@ -155,10 +159,10 @@ eval {
             my $sth = $sqldb->sql_execute($sql, @bind_vars);
 
             while (my $record = $sth->fetchrow_arrayref()) {
-                my $unique_id = $record->[ R_UNIQUE_D ];
+                my $unique_id = $record->[ R_UNIQUE_ID ];
                 my $article_id = $record->[ R_ARTICLE ];
                 my $client_id = $record->[ R_CLIENT_ID ];
-                my $request_timestamp = $record->[ R_REQUEST_TIMESTAMP ];
+                my $request_timestamp = $record->[ R_TIMESTAMP ];
 
                 Log->debug("unique ID: $unique_id\tarticle ID: $article_id\tclient ID: $client_id\trequest timestamp: $request_timestamp");
 
@@ -166,6 +170,7 @@ eval {
                     $hits_by_ip->{$ip_address}->{$article_id} = {};
                 }
 
+<<<<<<< HEAD
                 $hits_by_ip->{$ip_address}->{$article_id} = {};
 
                 if ($exclude_all_clients) {
@@ -214,9 +219,28 @@ eval {
                                 Log->debug("counted");
                                 push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
                             }
+=======
+                if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
+                    $hits_by_ip->{$ip_address}->{$article_id}->{$client_id} = { counted => ["$unique_id:$request_timestamp"], failed => [] };
+                } else {
+                    if (defined($interval_mins)) {
+                        my $prev_hit = $hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}->[-1];
+                        my ($prev_hit_id, $prev_hit_epoch) = split(':', $prev_hit);
+                        my $prev_dt = bepress::DateTime->from_epoch(epoch => $prev_hit_epoch);
+                        my $curr_dt = bepress::DateTime->from_epoch(epoch => $request_timestamp);
+
+                        Log->debug("previous dt: $prev_dt");
+                        Log->debug("current dt: $curr_dt");
+
+                        my $diff_minutes = abs($curr_dt->epoch() - $prev_dt->epoch()) / 60;
+                        Log->debug("time diff (mins): $diff_minutes");
+
+                        if ($diff_minutes < $interval_mins) {
+                            Log->debug("failed $interval_mins minute interval");
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}, "$unique_id:$request_timestamp");
                         } else {
-                            Log->debug("counted");
-                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, $unique_id);
+                            Log->debug("counted ok");
+                            push(@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{counted}}, "$unique_id:$request_timestamp");
                         }
                     }
                 }
@@ -239,7 +263,8 @@ eval {
                 foreach my $client_id (keys %{$hits_by_ip->{$ip_address}->{$article_id}}) {
                     Log->debug("ip address: $ip_address\tarticle ID: $article_id\tclient ID: $client_id");
 
-                    foreach my $unique_id (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}}) {
+                    foreach my $key (@{$hits_by_ip->{$ip_address}->{$article_id}->{$client_id}->{failed}}) {
+                        my ($unique_id, $request_timestamp) = split(':', $key);
                         my $sql = SQLDb::fold("
                             UPDATE
                                 logged_request
