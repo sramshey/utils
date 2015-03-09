@@ -170,10 +170,6 @@ eval {
 
                 Log->debug("unique ID: $unique_id\tarticle ID: $article_id\tclient ID: $client_id\trequest timestamp: $request_timestamp");
 
-                if (! defined($hits_by_ip->{$ip_address}->{$article_id})) {
-                    $hits_by_ip->{$ip_address}->{$article_id} = {};
-                }
-
                 if ($exclude_all_clients) {
                     if (! defined($hits_by_ip->{$ip_address}->{$article_id})) {
                         $hits_by_ip->{$ip_address}->{$article_id} = {};
@@ -208,6 +204,11 @@ eval {
                         }
                     }
                 } else {
+                    
+                    if (! defined($hits_by_ip->{$ip_address}->{$article_id})) {
+                        $hits_by_ip->{$ip_address}->{$article_id} = {};
+                    }
+
                     if (! defined($hits_by_ip->{$ip_address}->{$article_id}->{$client_id})) {
                         $hits_by_ip->{$ip_address}->{$article_id}->{$client_id} = {};
                         # this is the first counted hit from this IP/article ID/client ID combo
