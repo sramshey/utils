@@ -61,6 +61,7 @@ eval {
             Log->error("no IP2Location product code found in Globals - unable to determine correct product code to use!");
             exit 1;
         }
+        Log->debug("using database product code $db");
     }
 
     if (@fields) {
